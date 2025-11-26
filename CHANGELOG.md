@@ -12,9 +12,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Annotations API** - Extract PDF annotations including comments, highlights, and links
 - **ASCII85Decode filter** - Support for ASCII85-encoded streams (already implemented)
 
-### Changed
-- Repository cleaned up for public release (removed 48 internal development documents)
-- Documentation streamlined from 104 to 12 core files
+## [0.1.1] - 2025-11-25
+
+### Added
+- **OCR Feature** - Optical Character Recognition for scanned PDF text extraction
+  - PaddleOCR PP-OCRv5 integration via ONNX Runtime
+  - DBNet++ text detection model for multi-line text boxes
+  - SVTR/PP-OCRv5 text recognition with CTC greedy decoding
+  - Image preprocessing with resizing, normalization, and padding
+  - Polygon-based text region extraction with unclipping
+  - `OcrEngine` API with configurable detector and recognizer models
+  - Python bindings for OCR functionality via PyO3
+  - Feature-gated with `ocr` feature flag (optional dependency)
+- **Cross-Platform Binary Distribution**
+  - Multi-platform builds: Linux (glibc/musl, ARM64), macOS (x64/ARM64), Windows
+  - Automated GitHub Actions release workflow
+  - Pre-built binaries for all 8 CLI tools bundled per platform
+  - Python wheel builds for multiple architectures
+- **CLI Examples**
+  - `examples/ocr_scanned_pdf.rs` - Rust CLI for OCR processing
+  - `examples/ocr_example.py` - Python example for OCR integration
+
+### Fixed
+- **Clippy warnings** - Fixed unnecessary type casts, manual clamp usage, collapsible conditions
+- **Test compilation** - Fixed Rect field access in OCR integration tests
+
+### Technical
+- 16 integration tests for OCR engine (13 unit, 3 model-dependent)
+- Full SOLID principle compliance for CI/CD pipeline architecture
+- Comprehensive build pipeline documentation in `docs/CROSS_PLATFORM_BUILD_PIPELINE.md`
 
 ## [0.1.0] - 2025-10-30
 
