@@ -7,14 +7,15 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_assignments)]
+#![allow(deprecated)]
 //!   cargo run --release --bin export_to_markdown
 //!   cargo run --release --bin export_to_markdown -- --output-dir custom/path
 
-use pdf_oxide::content::{Operator, parse_content_stream};
+use pdf_oxide::content::{parse_content_stream, Operator};
 use pdf_oxide::converters::{ConversionOptions, MarkdownConverter};
 use pdf_oxide::document::PdfDocument;
 use pdf_oxide::extractors::forms::{FieldValue, FormExtractor};
-use pdf_oxide::layout::{FontWeight, Table, TextBlock, TextChar};
+use pdf_oxide::layout::{FontWeight, TextBlock, TextChar};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -57,12 +58,19 @@ struct ExportConfig {
 impl ExportConfig {
     fn from_args() -> Self {
         let args: Vec<String> = std::env::args().collect();
+        let mut pdf_dir = PathBuf::from("test_datasets/pdfs");
         let mut output_dir = PathBuf::from("markdown_exports/our_library");
         let mut verbose = false;
 
         let mut i = 1;
         while i < args.len() {
             match args[i].as_str() {
+                "--input-dir" => {
+                    i += 1;
+                    if i < args.len() {
+                        pdf_dir = PathBuf::from(&args[i]);
+                    }
+                },
                 "--output-dir" => {
                     i += 1;
                     if i < args.len() {
@@ -78,7 +86,7 @@ impl ExportConfig {
         }
 
         Self {
-            pdf_dir: PathBuf::from("test_datasets/pdfs"),
+            pdf_dir,
             output_dir,
             verbose,
         }
@@ -488,10 +496,7 @@ fn export_to_markdown(
         match pdf.extract_spans(page_num) {
             Ok(spans) => {
                 let converter = MarkdownConverter::new();
-                let options = ConversionOptions {
-                    detect_headings: false, // Disable heading detection for now
-                    ..Default::default()
-                };
+                let options = ConversionOptions::default();
 
                 match converter.convert_page_from_spans(&spans, &options) {
                     Ok(page_markdown) => {
@@ -745,56 +750,6 @@ fn group_chars_into_blocks(chars: &[TextChar]) -> Vec<TextBlock> {
     }
 
     blocks
-}
-
-/// Convert a Table structure to markdown format.
-fn table_to_markdown(table: &Table, blocks: &[TextBlock]) -> String {
-    if table.cells.is_empty() {
-        return String::new();
-    }
-
-    let mut markdown = String::new();
-    markdown.push('\n');
-
-    // Determine column count (max cells in any row)
-    let col_count = table.cells.iter().map(|row| row.len()).max().unwrap_or(0);
-
-    for (row_idx, row) in table.cells.iter().enumerate() {
-        markdown.push('|');
-
-        // Add cells
-        for col_idx in 0..col_count {
-            let cell_text = if col_idx < row.len() {
-                let block_idx = row[col_idx];
-                if block_idx < blocks.len() {
-                    blocks[block_idx]
-                        .text
-                        .replace('|', "\\|")
-                        .replace('\n', " ")
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            };
-
-            markdown.push_str(&format!(" {} |", cell_text));
-        }
-
-        markdown.push('\n');
-
-        // Add header separator after first row
-        if row_idx == 0 {
-            markdown.push('|');
-            for _ in 0..col_count {
-                markdown.push_str("---|");
-            }
-            markdown.push('\n');
-        }
-    }
-
-    markdown.push('\n');
-    markdown
 }
 
 fn main() {

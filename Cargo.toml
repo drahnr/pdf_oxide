@@ -1,15 +1,15 @@
 [package]
 name = "pdf_oxide"
-version = "0.1.4"
+version = "0.2.1"
 edition = "2021"
 authors = ["Yury Fedoseev <yfedoseev@gmail.com>"]
 license = "MIT OR Apache-2.0"
-description = "High-performance PDF parsing and conversion library with Python bindings"
+description = "Production-grade PDF parsing: spec-compliant text extraction, intelligent reading order, OCR support. 47.9× faster than PyMuPDF4LLM."
 repository = "https://github.com/yfedoseev/pdf_oxide"
 homepage = "https://github.com/yfedoseev/pdf_oxide"
 documentation = "https://docs.rs/pdf_oxide"
 readme = "README.md"
-keywords = ["pdf", "parser", "text-extraction", "machine-learning", "document-analysis"]
+keywords = ["pdf", "parsing", "text-extraction", "ocr", "specification-compliant"]
 categories = ["parsing", "text-processing"]
 
 [lib]
@@ -31,6 +31,7 @@ lazy_static = "1.4"
 # Data structures
 bytes = "1.5"
 indexmap = "2.2"
+byteorder = "1.5"  # For binary parsing (TrueType cmap tables)
 
 # Compression/Decompression
 flate2 = "1.0"
@@ -43,7 +44,9 @@ ttf-parser = "0.24"  # TrueType font parser for embedded font cmap tables
 phf = { version = "0.11", features = ["macros"] }  # Perfect hash maps for Adobe Glyph List
 
 # Image processing
-image = { version = "0.24", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "tiff"] }
+tiff = "0.9"  # TIFF support including CCITT decompression
+fax = "0.2"   # CCITT Group 3/4 decompression for scanned PDFs (more lenient with malformed EOFB)
 
 # Encryption support
 aes = "0.8"          # AES encryption for PDF 1.6+
@@ -52,13 +55,17 @@ md-5 = "0.10"        # MD5 for key derivation
 sha2 = "0.10"        # SHA-256 for newer encryption
 
 # Math and algorithms
-ndarray = { version = "0.15", optional = true }
+ndarray = { version = "0.16", optional = true, features = ["std"] }
 linfa = { version = "0.7", optional = true }
 linfa-clustering = { version = "0.7", optional = true }
 
 # ML (CPU-only)
 tract-onnx = { version = "0.21", optional = true }
 tokenizers = { version = "0.15", optional = true, default-features = false, features = ["onig"] }
+
+# OCR - PaddleOCR via ONNX Runtime (optional)
+ort = { version = "2.0.0-rc.10", optional = true, default-features = false, features = ["ndarray", "download-binaries"] }
+imageproc = { version = "0.25", optional = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -81,8 +88,6 @@ tesseract-rs = { version = "0.1", optional = true }
 # Table detection - page rendering (optional)
 pdfium-render = { version = "0.8", optional = true }
 
-# GPU support (optional)
-ort = { version = "2.0.0-rc.10", optional = true, features = ["cuda"] }
 lzw = "0.10.0"
 
 [dev-dependencies]
@@ -94,6 +99,9 @@ tempfile = "3.10"
 [features]
 default = []
 
+# Enable logging for the extraction pipeline
+logging = []
+
 # Python bindings (v0.1.0)
 python = ["pyo3"]
 
@@ -101,10 +109,13 @@ python = ["pyo3"]
 # We define them here to avoid check-cfg warnings, but their dependencies are commented out.
 ml = ["dep:tract-onnx", "dep:ndarray", "dep:linfa", "dep:linfa-clustering", "dep:tokenizers"]
 table-ml = ["ml", "dep:pdfium-render"]
-ocr = ["dep:tesseract-rs"]
+ocr = ["dep:ort", "dep:imageproc", "dep:ndarray"]
 gpu = ["dep:ort", "ml"]
 wasm = ["dep:wasm-bindgen", "dep:web-sys", "dep:js-sys", "dep:console_error_panic_hook", "dep:getrandom"]
 wasm-ml = ["wasm", "ml"]
+
+# Debug feature for span merging analysis
+debug-span-merging = []
 
 [profile.release]
 opt-level = 3
@@ -125,15 +136,44 @@ panic = "abort"
 opt-level = 3
 lto = true
 
-# Benchmarks will be added as they are implemented
-# [[bench]]
-# name = "parsing"
-# harness = false
+# Benchmarks
+[[bench]]
+name = "pdf_extraction_performance"
+harness = false
+
+[[bench]]
+name = "word_boundary_benchmarks"
+harness = false
+
+[[bench]]
+name = "script_detection_benchmarks"
+harness = false
+
+[[bench]]
+name = "ligature_benchmarks"
+harness = false
+
+[[bench]]
+name = "cjk_benchmarks"
+harness = false
+
+[[bench]]
+name = "rtl_benchmarks"
+harness = false
+
+[[bench]]
+name = "complex_script_benchmarks"
+harness = false
+
+[[bench]]
+name = "full_pipeline_benchmarks"
+harness = false
 
 # Cargo auto-discovers binaries in src/bin/
 
 [package.metadata.docs.rs]
-# No optional features for v0.1.0 - all core functionality is built-in
+# Document with all major features enabled for comprehensive API reference
+all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 # Python packaging (Maturin)

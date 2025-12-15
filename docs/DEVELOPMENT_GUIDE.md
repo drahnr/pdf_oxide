@@ -72,12 +72,12 @@ pdf_oxide/
 │       └── release.yml       # Release automation
 │
 ├── docs/
-│   ├── planning/              # Phase-by-phase plans
-│   │   ├── PROJECT_OVERVIEW.md
-│   │   ├── PHASE_1_*.md      # Detailed phase docs
-│   │   └── ...
-│   ├── HOOKS.md              # Hooks documentation
-│   └── DEVELOPMENT_GUIDE.md  # This file
+│   ├── spec/                 # PDF specification reference
+│   │   └── pdf.md            # ISO 32000-1:2008 excerpts
+│   ├── ARCHITECTURE.md       # System design
+│   ├── DEVELOPMENT_GUIDE.md  # This file
+│   ├── MARKDOWN_CONVERTER_USAGE.md # Markdown export guide
+│   └── ML_INTEGRATION.md     # OCR and ML features
 │
 ├── src/
 │   ├── lib.rs                # Library entry point
@@ -123,7 +123,7 @@ The project uses Claude Code hooks for automatic validation:
 - Full test suite
 - Runs in 10-40 seconds
 
-See [`docs/HOOKS.md`](HOOKS.md) for details.
+See `.claude/hooks.json` for hook configuration.
 
 ### Code Quality Tools
 
@@ -187,12 +187,10 @@ Read by Claude Code automatically to understand project context.
 Quick access to common tasks:
 
 ```bash
-/phase <N>           # Start implementing phase N
 /review              # Run code review checklist
 /test <module>       # Test specific module
 /bench <name>        # Run benchmarks
 /lint                # Run all linters
-/next                # Get next task
 /doc [module]        # Generate/check docs
 /check-features      # Test feature combinations
 ```
@@ -229,23 +227,21 @@ Code templates in `.claude/templates/`:
 
 ## Development Workflow
 
-### Starting a Phase
+### Starting a New Feature
 
-1. **Read planning document**:
-   ```bash
-   cat docs/planning/PHASE_X_*.md
-   ```
-   Or use: `/phase X`
+1. **Check GitHub Issues**:
+   - Browse open issues for areas needing help
+   - Look for `help-wanted` or `good-first-issue` labels
 
 2. **Create feature branch**:
    ```bash
-   git checkout -b phase-X-feature-name
+   git checkout -b feature/your-feature-name
    ```
 
 3. **Break down tasks**:
-   - Use task breakdown template
    - Create TodoList for tracking
-   - Estimate time
+   - Reference relevant code sections
+   - Check ARCHITECTURE.md for module organization
 
 ### Implementing a Feature
 
@@ -515,7 +511,7 @@ Use checklist: `.claude/checklists/code_review.md`
 
 ### Performance Targets
 
-From planning documents:
+Performance goals for core components:
 
 | Component | Target | Acceptable |
 |-----------|--------|------------|
@@ -523,7 +519,7 @@ From planning documents:
 | **DBSCAN (10k pts)** | 50ms | 100ms |
 | **XY-Cut** | 30ms/page | 50ms/page |
 | **Text extraction** | 50ms/page | 100ms/page |
-| **ML inference** | 100ms/page | 200ms/page |
+| **OCR inference** | 800-1000ms/page | (A4, 300 DPI) |
 
 ### Optimization Strategy
 
@@ -628,8 +624,8 @@ cargo doc --no-deps --all-features --open
 ### Branching Strategy
 
 - `main` - Stable, always working
-- `phase-X-feature-name` - Feature branches
-- `fix/issue-number` - Bug fixes
+- `feature/...` - Feature branches
+- `fix/...` - Bug fixes
 
 ### Commit Messages
 
@@ -665,8 +661,8 @@ Reason for changes
 ## Testing
 How tested
 
-## Phase/Task
-Phase X, Task Y from docs/planning/PHASE_X.md
+## Description
+Brief description of the feature or fix being implemented.
 
 ## Checklist
 - [x] Tests pass
@@ -696,9 +692,10 @@ Phase X, Task Y from docs/planning/PHASE_X.md
 ### Documentation
 
 - [CLAUDE.md](../CLAUDE.md) - Project context for Claude Code
-- [HOOKS.md](HOOKS.md) - Automated validation hooks
-- [Planning docs](planning/) - Phase-by-phase implementation guide
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture overview
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
+- [ML_INTEGRATION.md](ML_INTEGRATION.md) - OCR and ML features guide
+- [MARKDOWN_CONVERTER_USAGE.md](MARKDOWN_CONVERTER_USAGE.md) - Markdown export feature guide
 
 ### External References
 
@@ -720,17 +717,16 @@ Phase X, Task Y from docs/planning/PHASE_X.md
 
 ```bash
 /help              # Claude Code help
-/phase <N>         # Phase context
-/next              # Next task
-/review            # Code review
+/review            # Code review checklist
+/test <module>     # Run tests for module
 ```
 
-### Documentation
+### Before Starting
 
-1. Read relevant planning doc
-2. Check CLAUDE.md for standards
+1. Read ARCHITECTURE.md for module structure
+2. Check CLAUDE.md for coding standards
 3. Review similar implementations
-4. Consult PDF specification
+4. Consult PDF specification (docs/spec/pdf.md)
 
 ### Troubleshooting
 
@@ -752,13 +748,13 @@ Phase X, Task Y from docs/planning/PHASE_X.md
 **Hooks blocking**:
 - Read hook output
 - Fix the specific issue
-- See docs/HOOKS.md
+- Check `.claude/hooks.json` for hook configuration
 
 ## Best Practices Summary
 
 ### Development
 
-1. **Read planning docs first**
+1. **Understand the architecture first** (read ARCHITECTURE.md)
 2. **Write tests before code** (TDD)
 3. **Keep changes small** (easy to review)
 4. **Run checks frequently** (catch issues early)

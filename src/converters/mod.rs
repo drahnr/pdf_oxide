@@ -36,12 +36,107 @@
 
 pub mod html;
 pub mod markdown;
+pub mod table_formatter;
+pub mod text_post_processor;
 pub mod whitespace;
 
 // Re-export main types
+#[allow(deprecated)]
 pub use html::HtmlConverter;
+#[allow(deprecated)]
 pub use markdown::MarkdownConverter;
+pub use table_formatter::MarkdownTableFormatter;
+pub use text_post_processor::TextPostProcessor;
 pub use whitespace::{cleanup_markdown, normalize_whitespace, remove_page_artifacts};
+
+// Re-export BoldMarkerBehavior from pipeline config (single source of truth)
+pub use crate::pipeline::config::BoldMarkerBehavior;
+
+/// Configuration for table formatting in markdown.
+///
+/// All formatting parameters are configurable with no magic numbers.
+#[derive(Debug, Clone)]
+pub struct TableFormatConfig {
+    /// Include markdown table header separator (default: true)
+    pub include_header_separator: bool,
+    /// Spaces around cell content (default: 1)
+    pub cell_padding: usize,
+    /// Minimum column width in characters (default: 3)
+    pub min_column_width: usize,
+    /// Merge adjacent empty cells (default: true)
+    pub merge_adjacent_empty_cells: bool,
+    /// Preserve bold/italic formatting in cells (default: true)
+    pub preserve_cell_formatting: bool,
+    /// Text to use for empty cells (default: "-")
+    pub empty_cell_text: String,
+}
+
+impl TableFormatConfig {
+    /// Create a standard markdown table configuration.
+    pub fn default() -> Self {
+        Self {
+            include_header_separator: true,
+            cell_padding: 1,
+            min_column_width: 3,
+            merge_adjacent_empty_cells: true,
+            preserve_cell_formatting: true,
+            empty_cell_text: "-".to_string(),
+        }
+    }
+
+    /// Create a compact markdown table configuration.
+    pub fn compact() -> Self {
+        Self {
+            include_header_separator: true,
+            cell_padding: 0,
+            min_column_width: 1,
+            merge_adjacent_empty_cells: true,
+            preserve_cell_formatting: false,
+            empty_cell_text: String::new(),
+        }
+    }
+
+    /// Create a detailed markdown table configuration.
+    pub fn detailed() -> Self {
+        Self {
+            include_header_separator: true,
+            cell_padding: 2,
+            min_column_width: 5,
+            merge_adjacent_empty_cells: false,
+            preserve_cell_formatting: true,
+            empty_cell_text: "—".to_string(),
+        }
+    }
+
+    /// Create a custom markdown table configuration.
+    pub fn custom() -> Self {
+        Self::default()
+    }
+
+    /// Set cell padding (builder pattern).
+    pub fn with_cell_padding(mut self, padding: usize) -> Self {
+        self.cell_padding = padding;
+        self
+    }
+
+    /// Set minimum column width (builder pattern).
+    pub fn with_min_column_width(mut self, width: usize) -> Self {
+        self.min_column_width = width;
+        self
+    }
+
+    /// Set empty cell text (builder pattern).
+    pub fn with_empty_cell_text(mut self, text: &str) -> Self {
+        self.empty_cell_text = text.to_string();
+        self
+    }
+}
+
+impl Default for TableFormatConfig {
+    fn default() -> Self {
+        TableFormatConfig::default()
+    }
+}
 
 /// Options for converting PDF pages to different formats.
 ///
@@ -51,7 +146,7 @@ pub use whitespace::{cleanup_markdown, normalize_whitespace, remove_page_artifac
 /// # Examples
 ///
 /// ```
-/// use pdf_oxide::converters::{ConversionOptions, ReadingOrderMode};
+/// use pdf_oxide::converters::{BoldMarkerBehavior, ConversionOptions, ReadingOrderMode};
 ///
 /// // Default options
 /// let opts = ConversionOptions::default();
@@ -64,6 +159,8 @@ pub use whitespace::{cleanup_markdown, normalize_whitespace, remove_page_artifac
 ///     include_images: true,
 ///     image_output_dir: Some("images/".to_string()),
 ///     reading_order_mode: ReadingOrderMode::ColumnAware,
+///     bold_marker_behavior: BoldMarkerBehavior::Conservative,
+///     table_detection_config: None,
 /// };
 /// ```
 #[derive(Debug, Clone, PartialEq)]
@@ -101,6 +198,19 @@ pub struct ConversionOptions {
     ///
     /// Controls how text blocks are ordered in the output.
     pub reading_order_mode: ReadingOrderMode,
+
+    /// Control how bold markers are applied in markdown conversion.
+    ///
+    /// Determines whether bold formatting markers are applied to whitespace-only
+    /// content (Aggressive) or only to content-bearing text (Conservative).
+    /// See BoldMarkerBehavior for details.
+    pub bold_marker_behavior: BoldMarkerBehavior,
+
+    /// Configuration for spatial table detection.
+    ///
+    /// If None, uses default configuration.
+    /// Only applies when extract_tables = true.
+    pub table_detection_config: Option<crate::structure::TableDetectionConfig>,
 }
 
 impl Default for ConversionOptions {
@@ -113,6 +223,8 @@ impl Default for ConversionOptions {
     /// - include_images: true
     /// - image_output_dir: None
     /// - reading_order_mode: StructureTreeFirst (PDF-spec-compliant for Tagged PDFs, falls back to XY-Cut for untagged)
+    /// - bold_marker_behavior: Conservative (no bold markers for whitespace-only content)
+    /// - table_detection_config: None (uses defaults when table detection is enabled)
     fn default() -> Self {
         Self {
             preserve_layout: false,
@@ -121,7 +233,54 @@ impl Default for ConversionOptions {
             include_images: true,
             image_output_dir: None,
             reading_order_mode: ReadingOrderMode::StructureTreeFirst { mcid_order: vec![] },
+            bold_marker_behavior: BoldMarkerBehavior::Conservative,
+            table_detection_config: None,
         }
+    }
+}
+
+impl ConversionOptions {
+    /// Enable table detection with custom configuration.
+    ///
+    /// Sets extract_tables = true and uses the provided configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pdf_oxide::converters::ConversionOptions;
+    /// use pdf_oxide::structure::TableDetectionConfig;
+    ///
+    /// let config = TableDetectionConfig::strict();
+    /// let opts = ConversionOptions::default().with_table_detection(config);
+    ///
+    /// assert!(opts.extract_tables);
+    /// assert!(opts.table_detection_config.is_some());
+    /// ```
+    pub fn with_table_detection(mut self, config: crate::structure::TableDetectionConfig) -> Self {
+        self.extract_tables = true;
+        self.table_detection_config = Some(config);
+        self
+    }
+
+    /// Enable table detection with default configuration.
+    ///
+    /// Sets extract_tables = true and table_detection_config = None,
+    /// which will use the default TableDetectionConfig when detection runs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use pdf_oxide::converters::ConversionOptions;
+    ///
+    /// let opts = ConversionOptions::default().with_default_table_detection();
+    ///
+    /// assert!(opts.extract_tables);
+    /// assert!(opts.table_detection_config.is_none());
+    /// ```
+    pub fn with_default_table_detection(mut self) -> Self {
+        self.extract_tables = true;
+        self.table_detection_config = None;
+        self
     }
 }
 
@@ -185,6 +344,8 @@ mod tests {
             include_images: false,
             image_output_dir: Some("output/".to_string()),
             reading_order_mode: ReadingOrderMode::ColumnAware,
+            bold_marker_behavior: BoldMarkerBehavior::Aggressive,
+            table_detection_config: None,
         };
 
         assert!(opts.preserve_layout);
@@ -192,6 +353,8 @@ mod tests {
         assert!(!opts.include_images);
         assert_eq!(opts.image_output_dir, Some("output/".to_string()));
         assert_eq!(opts.reading_order_mode, ReadingOrderMode::ColumnAware);
+        assert_eq!(opts.bold_marker_behavior, BoldMarkerBehavior::Aggressive);
+        assert!(opts.table_detection_config.is_none());
     }
 
     #[test]
@@ -215,5 +378,49 @@ mod tests {
         let opts = ConversionOptions::default();
         let debug_str = format!("{:?}", opts);
         assert!(debug_str.contains("ConversionOptions"));
+    }
+
+    #[test]
+    fn test_bold_marker_behavior_default() {
+        assert_eq!(BoldMarkerBehavior::default(), BoldMarkerBehavior::Conservative);
+    }
+
+    #[test]
+    fn test_bold_marker_behavior_equality() {
+        assert_eq!(BoldMarkerBehavior::Conservative, BoldMarkerBehavior::Conservative);
+        assert_eq!(BoldMarkerBehavior::Aggressive, BoldMarkerBehavior::Aggressive);
+        assert_ne!(BoldMarkerBehavior::Conservative, BoldMarkerBehavior::Aggressive);
+    }
+
+    #[test]
+    fn test_bold_marker_behavior_copy_clone() {
+        let behavior = BoldMarkerBehavior::Aggressive;
+        let copied = behavior;
+        assert_eq!(behavior, copied);
+    }
+
+    #[test]
+    fn test_with_default_table_detection() {
+        let opts = ConversionOptions::default().with_default_table_detection();
+        assert!(opts.extract_tables);
+        assert!(opts.table_detection_config.is_none());
+    }
+
+    #[test]
+    fn test_with_table_detection() {
+        let config = crate::structure::TableDetectionConfig::strict();
+        let opts = ConversionOptions::default().with_table_detection(config);
+        assert!(opts.extract_tables);
+        assert!(opts.table_detection_config.is_some());
+        let cfg = opts.table_detection_config.unwrap();
+        assert_eq!(cfg.min_table_columns, 3);
+        assert_eq!(cfg.column_tolerance, 2.0);
+    }
+
+    #[test]
+    fn test_conversion_options_default_table_config() {
+        let opts = ConversionOptions::default();
+        assert!(!opts.extract_tables);
+        assert!(opts.table_detection_config.is_none());
     }
 }
