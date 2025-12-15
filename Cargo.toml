@@ -1,6 +1,6 @@
 [package]
 name = "pdf_oxide"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["Yury Fedoseev <yfedoseev@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -9,7 +9,7 @@ repository = "https://github.com/yfedoseev/pdf_oxide"
 homepage = "https://github.com/yfedoseev/pdf_oxide"
 documentation = "https://docs.rs/pdf_oxide"
 readme = "README.md"
-keywords = ["pdf", "parsing", "text-extraction", "ocr", "specification-compliant"]
+keywords = ["pdf", "text-extraction", "parser", "ocr", "rag"]
 categories = ["parsing", "text-processing"]
 
 [lib]
